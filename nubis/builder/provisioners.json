@@ -1,0 +1,14 @@
+{
+"provisioners": [
+  {
+    "type": "shell",
+    "inline": ["true"],
+    "order": "11"
+  },
+  {
+    "type": "file",
+    "source": "/Users/dcurado/nubis-skel/ha-nat-setup.sh",
+    "destination": "/etc/ha-nat-setup.sh"
+  }
+]
+}
