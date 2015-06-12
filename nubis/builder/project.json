@@ -3,11 +3,11 @@
     "automatic_version_bump": "1",
     "automatic_version_verify": "1",
     "builders": [
-      "amazon-ebs-ubuntu"
+      "ebs-amazon-linux"
     ],
-    "project_description": "Skeleton nubis module for testing nubis-builder",
-    "project_name": "nubis-skel",
-    "project_version": "0.63",
+    "project_description": "High Availability Network Address Translation Project",
+    "project_name": "nubis-ha-nat",
+    "project_version": "0.01",
     "source_ami_project_name": "nubis-base"
   }
 }
