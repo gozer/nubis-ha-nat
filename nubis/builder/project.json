@@ -3,11 +3,11 @@
     "automatic_version_bump": "1",
     "automatic_version_verify": "1",
     "builders": [
-      "ebs-amazon-linux"
+      "amazon-ebs-amazon-linux"
     ],
     "project_description": "High Availability Network Address Translation Project",
     "project_name": "nubis-ha-nat",
-    "project_version": "0.01",
+    "project_version": "0.2",
     "source_ami_project_name": "nubis-base"
   }
 }

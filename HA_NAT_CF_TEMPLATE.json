@@ -1,0 +1,372 @@
+{
+   "AWSTemplateFormatVersion" : "2010-09-09",
+
+   "Description" : "Creates a demonstration of ha-nat",
+
+   "Parameters" : {
+
+      "KeyName" : {
+         "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+         "Type": "AWS::EC2::KeyPair::KeyName",
+         "Default" : "dave_curado_key.pem",
+         "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+      },
+      "RegionName" : {
+         "Type" : "String",
+         "Default" : "us-east-1"
+      },
+      "InstanceType" : {
+         "Description" : "Bastion Host",
+         "Type" : "String",
+         "Default" : "t1.micro",
+         "AllowedValues" : [ "t1.micro", "m1.small"],
+         "ConstraintDescription" : "must be a valid EC2 instance type."
+      }
+   },
+
+   "Mappings" : {
+
+      "AWSInstanceType2Arch" : {
+         "t1.micro"    : { "Arch" : "PV64"   },
+         "t2.micro"    : { "Arch" : "HVM64"  },
+         "t2.small"    : { "Arch" : "HVM64"  },
+         "t2.medium"   : { "Arch" : "HVM64"  },
+         "m1.small"    : { "Arch" : "PV64"   },
+         "m1.medium"   : { "Arch" : "PV64"   },
+         "m1.large"    : { "Arch" : "PV64"   },
+         "m1.xlarge"   : { "Arch" : "PV64"   },
+         "m2.xlarge"   : { "Arch" : "PV64"   },
+         "m2.2xlarge"  : { "Arch" : "PV64"   },
+         "m2.4xlarge"  : { "Arch" : "PV64"   },
+         "m3.medium"   : { "Arch" : "HVM64"  },
+         "m3.large"    : { "Arch" : "HVM64"  },
+         "m3.xlarge"   : { "Arch" : "HVM64"  },
+         "m3.2xlarge"  : { "Arch" : "HVM64"  },
+         "c1.medium"   : { "Arch" : "PV64"   },
+         "c1.xlarge"   : { "Arch" : "PV64"   },
+         "c3.large"    : { "Arch" : "HVM64"  },
+         "c3.xlarge"   : { "Arch" : "HVM64"  },
+         "c3.2xlarge"  : { "Arch" : "HVM64"  },
+         "c3.4xlarge"  : { "Arch" : "HVM64"  },
+         "c3.8xlarge"  : { "Arch" : "HVM64"  },
+         "g2.2xlarge"  : { "Arch" : "HVMG2"  },
+         "r3.large"    : { "Arch" : "HVM64"  },
+         "r3.xlarge"   : { "Arch" : "HVM64"  },
+         "r3.2xlarge"  : { "Arch" : "HVM64"  },
+         "r3.4xlarge"  : { "Arch" : "HVM64"  },
+         "r3.8xlarge"  : { "Arch" : "HVM64"  },
+         "i2.xlarge"   : { "Arch" : "HVM64"  },
+         "i2.2xlarge"  : { "Arch" : "HVM64"  },
+         "i2.4xlarge"  : { "Arch" : "HVM64"  },
+         "i2.8xlarge"  : { "Arch" : "HVM64"  },
+         "hi1.4xlarge" : { "Arch" : "HVM64"  },
+         "hs1.8xlarge" : { "Arch" : "HVM64"  },
+         "cr1.8xlarge" : { "Arch" : "HVM64"  },
+         "cc2.8xlarge" : { "Arch" : "HVM64"  }
+       },
+       "AWSRegionArch2AMI" : {
+          "us-east-1"      : { "PV64" : "ami-50842d38", "HVM64" : "ami-08842d60", "HVMG2" : "ami-3a329952"  },
+          "us-west-2"      : { "PV64" : "ami-af86c69f", "HVM64" : "ami-8786c6b7", "HVMG2" : "ami-47296a77"  },
+          "us-west-1"      : { "PV64" : "ami-c7a8a182", "HVM64" : "ami-cfa8a18a", "HVMG2" : "ami-331b1376"  },
+          "eu-west-1"      : { "PV64" : "ami-aa8f28dd", "HVM64" : "ami-748e2903", "HVMG2" : "ami-00913777"  },
+          "ap-southeast-1" : { "PV64" : "ami-20e1c572", "HVM64" : "ami-d6e1c584", "HVMG2" : "ami-fabe9aa8"  },
+          "ap-northeast-1" : { "PV64" : "ami-21072820", "HVM64" : "ami-35072834", "HVMG2" : "ami-5dd1ff5c"  },
+          "ap-southeast-2" : { "PV64" : "ami-8b4724b1", "HVM64" : "ami-fd4724c7", "HVMG2" : "ami-e98ae9d3"  },
+          "sa-east-1"      : { "PV64" : "ami-9d6cc680", "HVM64" : "ami-956cc688", "HVMG2" : "NOT_SUPPORTED" },
+          "cn-north-1"     : { "PV64" : "ami-a857c591", "HVM64" : "ami-ac57c595", "HVMG2" : "NOT_SUPPORTED" },
+          "eu-central-1"   : { "PV64" : "ami-a03503bd", "HVM64" : "ami-b43503a9", "HVMG2" : "ami-b03503ad"  }
+      }
+   },
+
+   "Resources" : {
+
+      "MozillaVpc" : {
+         "Type" : "AWS::EC2::VPC",
+         "Properties" : {
+            "EnableDnsSupport" : "true",
+            "EnableDnsHostnames" : "true",
+            "CidrBlock": "10.160.0.0/16",
+            "Tags" : [ {"Key" : "Name", "Value" : "ha-nat"}]
+         }
+      },
+
+      "InternetGateway" : {
+         "Type" : "AWS::EC2::InternetGateway",
+         "Properties" : {
+            "Tags" : [ {"Key" : "Name", "Value" : "InternetGateway"}]
+         }
+      },
+
+      "InternetGatewayAttachment" : {
+         "Type" : "AWS::EC2::VPCGatewayAttachment",
+         "Properties" : {
+            "VpcId" : { "Ref" : "MozillaVpc" },
+            "InternetGatewayId" : { "Ref" : "InternetGateway" }
+         }
+      },
+
+      "PublicRouteTable" : {
+         "Type" : "AWS::EC2::RouteTable",
+         "Properties" : {
+            "VpcId" : {"Ref" : "MozillaVpc"},
+            "Tags" : [ {"Key" : "Name", "Value" : "PublicRouteTable"}]
+         }
+      },
+
+      "DefaultRoute" : {
+         "Type" : "AWS::EC2::Route",
+         "Properties" : {
+            "RouteTableId" : { "Ref" : "PublicRouteTable" },
+            "DestinationCidrBlock" : "0.0.0.0/0",
+            "GatewayId" : { "Ref" : "InternetGateway" }
+         }
+      },
+
+      "PublicSubnetAZ1" : {
+         "Type" : "AWS::EC2::Subnet",
+         "Properties" : {
+            "VpcId" : { "Ref" : "MozillaVpc" },
+            "AvailabilityZone": "us-east-1b",
+            "CidrBlock": "10.160.0.0/24",
+            "Tags" : [ {"Key" : "Name", "Value" : "PublicSubnet"}]
+         }
+      },
+
+      "PublicSubnetAZ1RouteTableAssociation" : {
+         "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+         "Properties" : {
+            "SubnetId" : { "Ref" : "PublicSubnetAZ1" },
+            "RouteTableId" : { "Ref" : "PublicRouteTable" }
+         }
+      },
+
+      "InternetAccessSecurityGroup" : {
+         "Type" : "AWS::EC2::SecurityGroup",
+         "Properties" : {
+            "VpcId" : { "Ref" : "MozillaVpc" },
+            "GroupDescription" : "Internet Access security group",
+            "SecurityGroupIngress" : [
+               { "IpProtocol" : "tcp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0" },
+               { "IpProtocol" : "udp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0" },
+               { "IpProtocol" : "icmp", "FromPort" : "-1", "ToPort" : "-1", "CidrIp" : "0.0.0.0/0" }
+            ],
+            "SecurityGroupEgress" : [
+               { "IpProtocol" : "tcp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0" },
+               { "IpProtocol" : "udp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0" },
+               { "IpProtocol" : "icmp", "FromPort" : "-1", "ToPort" : "-1", "CidrIp" : "0.0.0.0/0" }
+            ],
+            "Tags" : [ {"Key" : "Name", "Value" : "InternetAccessSecurityGroup"}]
+         }
+      },
+
+      "BastionHostSecurityGroup" : {
+         "Type" : "AWS::EC2::SecurityGroup",
+         "Properties" : {
+            "VpcId" : { "Ref" : "MozillaVpc" },
+            "GroupDescription" : "Bastion Host security group (ping and ssh)",
+            "SecurityGroupIngress" : [ 
+               { "IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "0.0.0.0/0" },
+               { "IpProtocol" : "icmp", "FromPort" : "8", "ToPort" : "-1", "CidrIp" : "0.0.0.0/0" }
+            ],
+            "Tags" : [ {"Key" : "Name", "Value" : "BastionHostSecurityGroup"}]
+         }
+      },
+
+      "BastionHost1" : {
+         "Type" : "AWS::EC2::Instance",
+         "Properties" : {
+            "KeyName" : { "Ref" : "KeyName" },
+            "NetworkInterfaces" : [{
+               "GroupSet"                 : [{ "Ref" : "BastionHostSecurityGroup" }],
+               "AssociatePublicIpAddress" : "true",
+               "DeviceIndex"              : "0",
+               "DeleteOnTermination"      : "true",
+               "SubnetId"                 : { "Ref" : "PublicSubnetAZ1" }
+            }],
+            "Tags" : [ {"Key" : "Name", "Value" : "BastionHost1"}], 
+            "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "RegionName" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] }
+         }
+      },
+
+      "PrivateSubnetAZ1" : {
+         "Type" : "AWS::EC2::Subnet",
+         "Properties" : {
+            "VpcId" : { "Ref" : "MozillaVpc" },
+            "AvailabilityZone": "us-east-1b",
+            "CidrBlock": "10.160.1.0/24",
+            "Tags" : [ {"Key" : "Name", "Value" : "PrivateSubnet"}]
+         }
+      },
+
+      "PrivateRouteTableAZ1" : {
+         "Type" : "AWS::EC2::RouteTable",
+         "Properties" : {
+            "VpcId" : { "Ref" : "MozillaVpc" },
+            "Tags" : [ {"Key" : "Name", "Value" : "PrivateSubnet1AZRouteTable"}]
+         }
+      }, 
+
+      "PrivateSubnetAZ1RouteTableAssociation" : {
+         "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+         "Properties" : {
+            "SubnetId" : { "Ref" : "PrivateSubnetAZ1" },
+            "RouteTableId" : { "Ref" : "PrivateRouteTableAZ1" }
+         }
+      },
+
+      "TestHost1" : {
+         "Type" : "AWS::EC2::Instance",
+         "Properties" : {
+            "KeyName" : { "Ref" : "KeyName" },
+            "NetworkInterfaces" : [{
+               "GroupSet"                 : [{ "Ref" : "InternetAccessSecurityGroup" }],
+               "AssociatePublicIpAddress" : "false",
+               "DeviceIndex"              : "0",
+               "DeleteOnTermination"      : "true",
+               "SubnetId"                 : { "Ref" : "PrivateSubnetAZ1" }
+            }],
+            "Tags" : [ {"Key" : "Name", "Value" : "TestHost1"}], 
+            "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "RegionName" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] }
+         }
+      },
+
+      "EIP" : {
+        "Type" : "AWS::EC2::EIP",
+        "Properties" : {
+            "Domain" : "vpc"
+        }
+      },
+
+   "ENI" : {
+      "Type" : "AWS::EC2::NetworkInterface",
+      "Properties" : {
+         "Description" : "testing123",
+         "GroupSet" : [ { "Ref" : "InternetAccessSecurityGroup" } ],
+         "SourceDestCheck" : "false",
+         "SubnetId" : { "Ref" : "PublicSubnetAZ1" }
+      }
+    },
+
+    "EIPAssociation" : {
+       "Type" : "AWS::EC2::EIPAssociation",
+       "Properties" : {
+          "AllocationId" : { "Fn::GetAtt" : [ "EIP", "AllocationId" ]},
+          "NetworkInterfaceId" : { "Ref" : "ENI" }
+        }
+     },
+
+     "PrivateRouteTableDefaultRoute" : {
+         "Type" : "AWS::EC2::Route",
+         "Properties" : {
+            "RouteTableId" : { "Ref" : "PrivateRouteTableAZ1" },
+            "DestinationCidrBlock" : "0.0.0.0/0",
+            "NetworkInterfaceId" : { "Ref" : "ENI" }
+         },
+         "DependsOn" : "EIPAssociation"
+      },
+
+      "NatRole": {
+         "Type": "AWS::IAM::Role",
+         "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Policies": [ {
+               "PolicyName": "ha-nat-monday",
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                     "Effect": "Allow",
+                     "Action": [ "ec2:AttachNetworkInterface", "ec2:DescribeNetworkInterfaces"],
+                     "Resource": "*"
+                  } ]
+               }
+            } ]
+         }
+      },
+
+      "NatInstanceProfile": {
+         "Type": "AWS::IAM::InstanceProfile",
+         "Properties": {
+            "Path": "/",
+            "Roles": [ {
+               "Ref": "NatRole"
+            } ]
+         }
+      },
+
+      "NATAutoScalingLaunchConfig": {
+        "Type" : "AWS::AutoScaling::LaunchConfiguration",
+        "Properties" : {
+           "AssociatePublicIpAddress" : "true",
+
+           "IamInstanceProfile" : { "Ref" : "NatInstanceProfile" },
+           "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "RegionName" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+           "SecurityGroups" : [{ "Ref" : "InternetAccessSecurityGroup" }],
+           "KeyName" : { "Ref" : "KeyName" },
+           "InstanceType" : { "Ref" : "InstanceType" },
+           "UserData": { "Fn::Base64" : { "Fn::Join" : [ "\n", [
+                   "#!/bin/bash",
+                   "my_eni_id=$(/usr/bin/aws ec2 describe-network-interfaces  --region us-east-1 --filters Name='description',Values='testing123' --query 'NetworkInterfaces[*].{ID:NetworkInterfaceId}' --output text)",
+                   "my_instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)",
+                   "/usr/bin/aws ec2 attach-network-interface --network-interface-id ${my_eni_id} --instance-id ${my_instance_id} --device-index 1 --region 'us-east-1'",
+                   "/bin/sleep 30",
+                   "/sbin/ifdown eth0",
+                   "/sbin/iptables -t nat -A POSTROUTING -j MASQUERADE",
+                   "/sbin/iptables -A FORWARD -j ACCEPT",
+                   "/sbin/sysctl -w 'net.ipv4.ip_forward=1'"
+           ]]}}
+        }
+      },
+
+      "TheAutoScalingGroup": {
+         "Type" : "AWS::AutoScaling::AutoScalingGroup",
+         "Properties" : {
+             "AvailabilityZones" : [ "us-east-1b" ],
+             "Cooldown" : "300",
+             "HealthCheckGracePeriod" : "30",
+             "HealthCheckType" : "EC2",
+             "LaunchConfigurationName" : { "Ref" : "NATAutoScalingLaunchConfig" },
+             "MinSize" : "1",
+             "MaxSize" : "1",
+             "Tags" : [ { "Key" : "Name", "Value" : "NAT", "PropagateAtLaunch" : "true" } ],
+             "VPCZoneIdentifier" : [{ "Ref" : "PublicSubnetAZ1" }]
+          }
+       }
+   },
+
+   "Outputs" : {
+      "StackNameId" : {
+         "Description" : "The name of the stack that was just run.", 
+         "Value" : { "Ref" : "AWS::StackName" }
+      },
+      "StackId" : {
+         "Description" : "The stack id of the stack that was just created.",
+         "Value" : { "Ref" : "AWS::StackId" }
+      }, 
+      "RegionId" : {
+         "Description" : "The region in which this Vpc was just created.",
+         "Value" : { "Ref" : "RegionName" }
+      },
+      "VpcId" : {
+         "Description" : "The ID of the VPC this template just created.",
+         "Value" : { "Ref" : "MozillaVpc" }
+      },
+      "EIP" : {
+         "Description" : "The EIP ID.",
+         "Value" : { "Ref" : "EIP" }
+      },
+      "ENI" : {
+         "Description" : "The ENI ID.",
+         "Value" : { "Ref" : "ENI" }
+      }
+   }
+}
+
